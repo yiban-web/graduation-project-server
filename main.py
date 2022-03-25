@@ -5,7 +5,8 @@ import json
 import pymysql
 from sqlalchemy import func
 
-from file_operation import upload_file
+from const import DB_USER, DB_PASSWORD
+from file_operation import upload_file, delete
 
 pymysql.install_as_MySQLdb()
 app = Flask(__name__)
@@ -14,8 +15,8 @@ app = Flask(__name__)
 class Config(object):
     """配置参数"""
     # 设置连接数据库的URL
-    user = ''
-    password = ''
+    user = DB_USER
+    password = DB_PASSWORD
     database = 'graduation-project'
     app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://%s:%s@127.0.0.1:3306/%s' % (user, password, database)
 
@@ -128,6 +129,29 @@ class File(db.Model):
         db.session.commit()
         return self.voice_id
 
+    def to_dict(self):
+        # 列表展示的简略数据
+        return {
+            'voiceName': self.voice_name,
+            # 'voiceUrl': self.voice_url,
+            'voiceDuration': self.voice_duration,
+            # 'voiceTextUrl': self.voice_text_url,
+            'voiceScore': self.voice_score,
+            'voiceId': self.voice_id
+        }
+
+    def to_dict_detail(self):
+        # 文件详细数据
+        return {
+            'voiceName': self.voice_name,
+            'voiceUrl': self.voice_url,
+            'voiceDuration': self.voice_duration,
+            'voiceTextUrl': self.voice_text_url,
+            'voiceScore': self.voice_score,
+            'voiceId': self.voice_id,
+            'voiceTags': self.voice_tags
+        }
+
 
 @app.route('/upload', methods=['POST'])
 # 上传文件
@@ -166,6 +190,70 @@ def have_files_num():
             'fileCount': count
         }
     })
+
+
+@app.route('/getFilesList', methods=['POST'])
+# 查询已有文件
+def get_files_list():
+    data = json.loads(request.data)
+    page = int(data['page'])
+    page_size = int(data['pageSize'])
+    offset_data = page_size * (page - 1)
+    files_list = db.session.query(File).offset(offset_data).limit(page_size)
+    res = []
+    for item in files_list:
+        res.append(item.to_dict())
+    # print(res)
+    return json.dumps({
+        'code': 200,
+        'msg': "",
+        'data': {
+            'filesList': res
+        }
+    })
+
+
+@app.route('/getFileDetail', methods=['POST'])
+# 根据文件id查找具体内容
+def get_file_detail():
+    code = 200
+    msg = ""
+    try:
+        file_id = json.loads(request.data)['fileId']
+        file = db.session.query(File).filter(File.voice_id == file_id).first()
+    except:
+        code = 0
+        msg = "请求失败"
+    finally:
+        return json.dumps({
+            'code': code,
+            'msg': msg,
+            'data': {
+                'fileData': file.to_dict_detail()
+            }
+        })
+
+
+@app.route('/deleteFile', methods=['POST'])
+# 删除文件
+def delete_file():
+    code = 200
+    msg = ""
+    try:
+        file_id = json.loads(request.data)['fileId']
+        file = db.session.query(File).filter(File.voice_id == file_id).first()
+        delete(file.voice_name)
+        db.session.delete(file)
+        db.session.commit()
+        db.session.close()
+    except:
+        code = 0
+        msg = "删除失败"
+    finally:
+        return json.dumps({
+            'code': 200,
+            'msg': "",
+        })
 
 
 if __name__ == '__main__':
