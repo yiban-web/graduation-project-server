@@ -6,7 +6,7 @@ import pymysql
 from sqlalchemy import func
 
 from const import DB_USER, DB_PASSWORD
-from file_operation import upload_file, delete
+from file_operation import upload_file, delete, download_file
 
 pymysql.install_as_MySQLdb()
 app = Flask(__name__)
@@ -253,6 +253,28 @@ def delete_file():
         return json.dumps({
             'code': 200,
             'msg': "",
+        })
+
+
+@app.route('/readTextFile', methods=['POST'])
+def read_text_file():
+    file_url = json.loads(request.data)['voiceTextUrl']
+    code = 200
+    msg = ""
+    text = ""
+    try:
+        text = download_file(file_url)
+    except:
+        code = 0
+        msg = "文件读取失败"
+        text = ""
+    finally:
+        return json.dumps({
+            'code': code,
+            'msg': msg,
+            'data': {
+                'content': text
+            }
         })
 
 

@@ -1,10 +1,11 @@
 # -*- coding=utf-8
+# -*- coding: utf-8 -*-
 from qcloud_cos import CosConfig
 from qcloud_cos import CosS3Client
 import sys
 import logging
 
-from const import SECRET_ID, SECRET_KEY, REGION, BUCKET, DIR_NAME
+from const import SECRET_ID, SECRET_KEY, REGION, BUCKET, TEXT_NAME, VOICE_NAME
 
 # 正常情况日志级别使用INFO，需要定位时可以修改为DEBUG，此时SDK会打印和服务端的通信信息
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
@@ -20,20 +21,21 @@ scheme = 'https'  # 指定使用 http/https 协议来访问 COS，默认为 http
 config = CosConfig(Region=region, SecretId=secret_id, SecretKey=secret_key, Token=token, Scheme=scheme)
 client = CosS3Client(config)
 
-dir_name = DIR_NAME
+voice_name = VOICE_NAME
+text_name = TEXT_NAME
 bucket = BUCKET
 
 
 def upload_file(file_name: str, body: bytes):
     response = client.put_object(
         Bucket=bucket,
-        Key=dir_name + file_name,
+        Key=voice_name + file_name,
         Body=body,
         ACL='public-read'
     )
     url = client.get_object_url(
         Bucket=bucket,
-        Key=dir_name + file_name,
+        Key=voice_name + file_name,
     )
     print(response)
     return url
@@ -42,6 +44,22 @@ def upload_file(file_name: str, body: bytes):
 def delete(file_name):
     response = client.delete_object(
         Bucket=bucket,
-        Key=dir_name + file_name
+        Key=voice_name + file_name
     )
     print(response)
+
+
+def download_file(file_name):
+    response = client.get_object(
+        Bucket=bucket,
+        Key=text_name + file_name,
+        # Range='bytes=0-100'
+    )
+    print('文件下载')
+    # print(str(response['Body'].get_raw_stream().read(), 'ANSI'))
+    res = ''
+    for line in response['Body'].get_raw_stream().readlines():  # 依次读取每行
+        line = line.strip()  # 去掉每行头尾空白
+        res += str(line, 'ANSI') + '\n'
+        # print(f'line:{line}')
+    return res
