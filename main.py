@@ -1,3 +1,5 @@
+import os.path
+
 import requests
 from flask import Flask, request, make_response
 from flask_sqlalchemy import SQLAlchemy
@@ -6,7 +8,7 @@ import pymysql
 from sqlalchemy import func
 
 from const import DB_USER, DB_PASSWORD
-from file_operation import upload_file, delete, download_file
+from file_operation import upload_file, delete, download_file, upload_file_text
 
 pymysql.install_as_MySQLdb()
 app = Flask(__name__)
@@ -279,5 +281,36 @@ def read_text_file():
         })
 
 
+def upload_folder(url: str):
+    path = url
+    if os.path.exists(path):
+        files = os.listdir(path)
+        for item in files:
+            voice_name = item.split('.')[0]
+            with open(url + '\\' + item, 'rb') as f:
+                voice_url = upload_file(voice_name + '.mp3', f.read())
+                new_file = File(voice_name + '.mp3', voice_url, 0, 0, voice_name + '.txt', '')
+                if db.session.query(File).filter(File.voice_name == voice_name).count() == 0:
+                    new_file.add()
+    else:
+        print('空文件夹')
+
+
+def upload_folder_txt(url: str):
+    path = url
+    if os.path.exists(path):
+        files = os.listdir(path)
+        for item in files:
+            voice_name = item.split('.')[0]
+            with open(url + '\\' + item, 'rb') as f:
+                upload_file_text(voice_name + '.txt', f.read())
+    else:
+        print('空文件夹')
+
+
 if __name__ == '__main__':
     app.run()
+
+    # 负责更新cos内文件
+    # upload_folder('D:\毕设语音+文本素材\语音')
+    # upload_folder_txt('D:\毕设语音+文本素材\文本\语音转文本\后五十')

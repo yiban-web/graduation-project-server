@@ -41,6 +41,21 @@ def upload_file(file_name: str, body: bytes):
     return url
 
 
+def upload_file_text(file_name: str, body: bytes):
+    response = client.put_object(
+        Bucket=bucket,
+        Key=text_name + file_name,
+        Body=body,
+        ACL='public-read'
+    )
+    url = client.get_object_url(
+        Bucket=bucket,
+        Key=text_name + file_name,
+    )
+    print(response)
+    return url
+
+
 def delete(file_name):
     response = client.delete_object(
         Bucket=bucket,
@@ -50,17 +65,16 @@ def delete(file_name):
 
 
 def download_file(file_name):
+    # 读取txt文件内容
     response = client.get_object(
         Bucket=bucket,
         Key=text_name + file_name,
         # Range='bytes=0-100'
     )
     print('文件下载')
-    # print(str(response['Body'].get_raw_stream().read(), 'ANSI'))
     res = ''
-    for line in response['Body'].get_raw_stream().readlines():  # 依次读取每行
-        line = line.strip()  # 去掉每行头尾空白
+    for line in response['Body'].get_raw_stream().readlines():
+        line = line.strip()
         res += str(line, 'ANSI') + '\n'
-        # print(f'line:{line}')
-        #
     return res
+
