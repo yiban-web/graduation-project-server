@@ -62,4 +62,5 @@ def download_file(file_name):
         line = line.strip()  # 去掉每行头尾空白
         res += str(line, 'ANSI') + '\n'
         # print(f'line:{line}')
+        #
     return res

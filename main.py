@@ -257,6 +257,7 @@ def delete_file():
 
 
 @app.route('/readTextFile', methods=['POST'])
+# 读取文件
 def read_text_file():
     file_url = json.loads(request.data)['voiceTextUrl']
     code = 200
