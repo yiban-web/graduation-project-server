@@ -8,7 +8,9 @@ import pymysql
 from sqlalchemy import func
 
 from const import DB_USER, DB_PASSWORD
+# from excel_operation import get_data
 from file_operation import upload_file, delete, download_file, upload_file_text
+from redis_operation import cache_data, have_tag
 
 pymysql.install_as_MySQLdb()
 app = Flask(__name__)
@@ -181,6 +183,39 @@ def upload():
         })
 
 
+@app.route('/countGrade', methods=['POST', 'GET'])
+# 测试用算分数接口，这里主要是关键字扣分，总分30，每个关键字-2
+def count_grade():
+    code = 200
+    msg = ""
+    grade = 0
+    data = json.loads(request.data)
+    # file_id = request.args.get('id')
+    file_id = data['id']
+    # noinspection PyBroadException
+    try:
+        # 这里设置测试用关键字，每出现一个关键字分数-2，实际关键字由LSTM模型学习生成
+        test_tags = '财务销账,避税,假证,开票,票'
+        file = db.session.query(File).filter(File.voice_id == file_id).first()
+        file.voice_tags = test_tags
+        # 这里放置测试用的假文本数据地址，实际由机器学习解析语音生成
+        file.voice_text_url = '4161c287b86d0550.txt'
+        tag_list = file.voice_tags.split(',')
+        for item in tag_list:
+            if have_tag(item) and grade < 30:
+                grade += 2
+        file.voice_score = 100 - grade
+        db.session.commit()
+    except Exception as e:
+        code = 0
+        msg = '操作失败'
+    finally:
+        return json.dumps({
+            'code': code,
+            'msg': msg,
+        })
+
+
 @app.route('/haveFilesNum', methods=['GET'])
 def have_files_num():
     count = db.session.query(func.count('*')).select_from(File).scalar()
@@ -220,10 +255,11 @@ def get_files_list():
 def get_file_detail():
     code = 200
     msg = ""
+    # noinspection PyBroadException
     try:
         file_id = json.loads(request.data)['fileId']
         file = db.session.query(File).filter(File.voice_id == file_id).first()
-    except:
+    except Exception as e:
         code = 0
         msg = "请求失败"
     finally:
@@ -241,6 +277,7 @@ def get_file_detail():
 def delete_file():
     code = 200
     msg = ""
+    # noinspection PyBroadException
     try:
         file_id = json.loads(request.data)['fileId']
         file = db.session.query(File).filter(File.voice_id == file_id).first()
@@ -253,8 +290,8 @@ def delete_file():
         msg = "删除失败"
     finally:
         return json.dumps({
-            'code': 200,
-            'msg': "",
+            'code': code,
+            'msg': msg,
         })
 
 
@@ -265,9 +302,10 @@ def read_text_file():
     code = 200
     msg = ""
     text = ""
+    # noinspection PyBroadException
     try:
         text = download_file(file_url)
-    except:
+    except Exception as e:
         code = 0
         msg = "文件读取失败"
         text = ""
@@ -310,7 +348,8 @@ def upload_folder_txt(url: str):
 
 if __name__ == '__main__':
     app.run()
-
+    # print(test_redis())
+    # cache_data()
     # 负责更新cos内文件
     # upload_folder('D:\毕设语音+文本素材\语音')
     # upload_folder_txt('D:\毕设语音+文本素材\文本\语音转文本\后五十')
