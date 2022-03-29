@@ -1,42 +1,16 @@
 import os.path
 
-import requests
-from flask import Flask, request, make_response
-from flask_sqlalchemy import SQLAlchemy
+import eyed3
+from flask import request, make_response
 import json
 import pymysql
 from sqlalchemy import func
 
-from const import DB_USER, DB_PASSWORD
-# from excel_operation import get_data
 from file_operation import upload_file, delete, download_file, upload_file_text
-from redis_operation import cache_data, have_tag
+from redis_operation import have_tag
+from tool import app, db
 
 pymysql.install_as_MySQLdb()
-app = Flask(__name__)
-
-
-class Config(object):
-    """配置参数"""
-    # 设置连接数据库的URL
-    user = DB_USER
-    password = DB_PASSWORD
-    database = 'graduation-project'
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://%s:%s@127.0.0.1:3306/%s' % (user, password, database)
-
-    # 设置sqlalchemy自动更跟踪数据库
-    SQLALCHEMY_TRACK_MODIFICATIONS = True
-
-    # 查询时会显示原始SQL语句
-    app.config['SQLALCHEMY_ECHO'] = True
-
-    # 禁止自动提交数据处理
-    app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = False
-
-
-app.config.from_object(Config)
-# 创建数据库读取配置
-db = SQLAlchemy(app)
 
 
 @app.route('/')
@@ -107,7 +81,7 @@ class File(db.Model):
     __tablename__ = 'voice-files-data'
     voice_name = db.Column(db.CHAR(40))
     voice_id = db.Column(db.INT, primary_key=True, autoincrement=True)
-    # 音频时长(目前不知道怎么获取)
+    # 音频时长 单位s
     voice_duration = db.Column(db.INT)
     # 分数
     voice_score = db.Column(db.INT)
@@ -165,14 +139,20 @@ def upload():
     code = 200
     msg = ""
     try:
-        voice_url = upload_file(request.values.get('fileName'), request.files.get('voiceFile').read())
+        file_byte = request.files.get('voiceFile').read()
+        voice_url = upload_file(request.values.get('fileName'), file_byte)
         voice_name = request.values.get('fileName')
+        duration = get_voice_time_secs(file_byte, '.\\temporary.mp3')
+        # print(f'时长 {duration}')
         new_file = File(voice_name, voice_url)
+        new_file.voice_duration = duration
         # print(new_file)
         new_file_id = new_file.add()
-    except:
+    except Exception as e:
         code = 0
         msg = "上传失败"
+        print(e)
+        print()
     finally:
         return json.dumps({
             'code': code,
@@ -181,6 +161,17 @@ def upload():
                 'fileId': new_file_id
             }
         })
+
+
+def get_voice_time_secs(file_data, file_name):
+    # 获取文件时长
+    # print(file_data)
+    with open(file_name, 'wb') as f:
+        f.write(file_data)
+    voice_file = eyed3.load(file_name)
+    secs = int(voice_file.info.time_secs)
+    # os.remove(file_name)
+    return secs
 
 
 @app.route('/countGrade', methods=['POST', 'GET'])
@@ -196,17 +187,23 @@ def count_grade():
     try:
         # 这里设置测试用关键字，每出现一个关键字分数-2，实际关键字由LSTM模型学习生成
         test_tags = '财务销账,避税,假证,开票,票'
+        illegal_tags = ''
         file = db.session.query(File).filter(File.voice_id == file_id).first()
-        file.voice_tags = test_tags
+
         # 这里放置测试用的假文本数据地址，实际由机器学习解析语音生成
         file.voice_text_url = '4161c287b86d0550.txt'
-        tag_list = file.voice_tags.split(',')
+        tag_list = test_tags.split(',')
         for item in tag_list:
-            if have_tag(item) and grade < 30:
-                grade += 2
+            if have_tag(item):
+                illegal_tags += item+','
+                if grade < 30:
+                    grade += 2
         file.voice_score = 100 - grade
+        # print(f' illegal_tags {illegal_tags}')
+        file.voice_tags = illegal_tags[:len(illegal_tags)-1]
         db.session.commit()
     except Exception as e:
+        # print(f'错误 {e}')
         code = 0
         msg = '操作失败'
     finally:
@@ -346,10 +343,29 @@ def upload_folder_txt(url: str):
         print('空文件夹')
 
 
+def record_duration(url):
+    # 录入已有声音时长
+    path = url
+    if os.path.exists(path):
+        files = os.listdir(path)
+        for i, item in enumerate(files):
+            voice_name = item.split('.')[0]
+            voice_file = eyed3.load(path + '//' + item)
+            secs = int(voice_file.info.time_secs)
+            file = db.session.query(File).filter(File.voice_name == item).first()
+            file.voice_duration = secs
+            db.session.commit()
+            print(f'{i} , {secs}')
+    else:
+        print('空文件夹')
+
+
 if __name__ == '__main__':
     app.run()
-    # print(test_redis())
+
     # cache_data()
+
     # 负责更新cos内文件
     # upload_folder('D:\毕设语音+文本素材\语音')
     # upload_folder_txt('D:\毕设语音+文本素材\文本\语音转文本\后五十')
+    # record_duration('D:\毕设语音+文本素材\语音')
