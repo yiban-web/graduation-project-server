@@ -6,7 +6,6 @@ from tool import db
 
 pymysql.install_as_MySQLdb()
 
-
 r = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 
@@ -22,9 +21,15 @@ def test_redis():
     return r.get('foo')
 
 
+
+
 def cache_data():
     # 缓存数据库数据
-    tags_list = db.session.query(Tag).all()
+    # 批量只缓存两百条
+    if db.session.query(Tag).count() >= 200:
+        tags_list = db.session.query(Tag).limit(200).all()
+    else:
+        tags_list = db.session.query(Tag).all()
     for item in tags_list:
         r.set(item.tag_name, item.tag_type)
     # print(bool(r.get('你好')))
@@ -34,14 +39,20 @@ def have_tag(tag_name):
     # 返回是否在关键字中存在
     res = False
     # print(f'redis  {tag_name} {bool(r.get(tag_name))}')
-    if bool(r.get(tag_name)):
-        res = True
-    else:
-        tag = db.session.query(Tag).filter(Tag.tag_name == tag_name)
-        if tag.count() > 0:
-            r.set(tag.first().tag_name, tag.first().tag_type)
-            res = True
-        else:
-            res = False
+    res = bool(r.get(tag_name))
+    # if bool(r.get(tag_name)):
+    #     res = True
+    # else:
+    #
+    #     tag = db.session.query(Tag).filter(Tag.tag_name == tag_name)
+    #     if tag.count() > 0:
+    #         r.set(tag.first().tag_name, tag.first().tag_type)
+    #         res = True
+    #     else:
+    #         res = False
     print(f'res {tag_name} {res}')
     return res
+
+
+cache_data()
+print(f'测试${r.get("微信")}')

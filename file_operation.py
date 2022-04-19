@@ -78,6 +78,7 @@ def download_file(file_name):
         res += str(line, 'ANSI') + '\n'
     return res
 
+
 def download_voice(file_name):
     response = client.get_object(
         Bucket=bucket,

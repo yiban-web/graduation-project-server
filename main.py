@@ -1,6 +1,7 @@
 import os.path
 
 import eyed3
+import jieba
 from flask import request, make_response
 import json
 import pymysql
@@ -186,7 +187,7 @@ def count_grade():
     # noinspection PyBroadException
     try:
         # 这里设置测试用关键字，每出现一个关键字分数-2，实际关键字由LSTM模型学习生成
-        test_tags = '财务销账,避税,假证,开票,票'
+        test_tags = '宗教信仰,避税,反人类,开票,票'
         illegal_tags = ''
         file = db.session.query(File).filter(File.voice_id == file_id).first()
 
@@ -195,12 +196,12 @@ def count_grade():
         tag_list = test_tags.split(',')
         for item in tag_list:
             if have_tag(item):
-                illegal_tags += item+','
+                illegal_tags += item + ','
                 if grade < 30:
                     grade += 2
         file.voice_score = 100 - grade
         # print(f' illegal_tags {illegal_tags}')
-        file.voice_tags = illegal_tags[:len(illegal_tags)-1]
+        file.voice_tags = illegal_tags[:len(illegal_tags) - 1]
         db.session.commit()
     except Exception as e:
         # print(f'错误 {e}')
@@ -211,6 +212,11 @@ def count_grade():
             'code': code,
             'msg': msg,
         })
+
+
+def participle_words(sentence):
+    seg_list = jieba.cut("中国上海是一座美丽的国际性大都市", cut_all=False)
+    print("Full Mode: " + "/ ".join(seg_list))
 
 
 @app.route('/haveFilesNum', methods=['GET'])
@@ -227,7 +233,7 @@ def have_files_num():
 
 
 @app.route('/getFilesList', methods=['POST'])
-# 查询已有文件
+# 分页返回已有文件
 def get_files_list():
     data = json.loads(request.data)
     page = int(data['page'])
@@ -241,6 +247,29 @@ def get_files_list():
     return json.dumps({
         'code': 200,
         'msg': "",
+        'data': {
+            'filesList': res
+        }
+    })
+
+
+@app.route('/selectFiles', methods=['GET'])
+# 查询已有文件
+def selectFiles():
+    name = request.args.get('name')
+    # print(name)
+    code = 200
+    msg = ""
+    files_list = db.session.query(File).filter(File.voice_name.like(f'%{name}%'))
+    if files_list.count() >= 10:
+        files_list = files_list.limit(10)
+        msg = "仅展示十条查询结果"
+    res = []
+    for item in files_list:
+        res.append(item.to_dict())
+    return json.dumps({
+        'code': code,
+        'msg': msg,
         'data': {
             'filesList': res
         }
