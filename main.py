@@ -7,8 +7,12 @@ import json
 import pymysql
 from sqlalchemy import func
 
+from File import File
+from User import User
 from file_operation import upload_file, delete, download_file, upload_file_text
+from participle_words import keys_words_grade
 from redis_operation import have_tag
+from test_text import test_voice_change_txt
 from tool import app, db
 
 pymysql.install_as_MySQLdb()
@@ -17,27 +21,6 @@ pymysql.install_as_MySQLdb()
 @app.route('/')
 def index():
     return "hello world"
-
-
-class User(db.Model):
-    __tablename__ = 'userinfo'
-    user_id = db.Column(db.INT, primary_key=True, autoincrement=True)
-    username = db.Column(db.CHAR(30), unique=True)
-    password = db.Column(db.CHAR(20))
-
-    # 根据username查找
-    def look_up_by_name(self):
-        res_count = db.session.query(User).filter(User.username == self.username).count()
-        return res_count
-
-    def add(self):
-        db.session.add(self)
-        db.session.commit()
-
-    def look_up(self):
-        res_count = db.session.query(User).filter(User.username == self.username
-                                                  and User.password == self.password).count()
-        return res_count
 
 
 @app.route('/register', methods=['POST'])
@@ -78,60 +61,6 @@ def login():
     })
 
 
-class File(db.Model):
-    __tablename__ = 'voice-files-data'
-    voice_name = db.Column(db.CHAR(40))
-    voice_id = db.Column(db.INT, primary_key=True, autoincrement=True)
-    # 音频时长 单位s
-    voice_duration = db.Column(db.INT)
-    # 分数
-    voice_score = db.Column(db.INT)
-    # 文本文件地址
-    voice_text_url = db.Column(db.VARCHAR(100))
-    # 音频地址
-    voice_url = db.Column(db.VARCHAR(100))
-    # 关键字标签
-    voice_tags = db.Column(db.TEXT)
-
-    def __init__(self, name: str, url: str, duration=0, score=0, text_url='', tags=''):
-        self.voice_name = name
-        self.voice_url = url
-        self.voice_duration = duration
-        self.voice_text_url = text_url
-        self.voice_tags = tags
-        self.voice_score = score
-
-    def add(self):
-        db.session.add(self)
-        db.session.flush()
-        # print(f"id  {self.voice_id}")
-        db.session.commit()
-        return self.voice_id
-
-    def to_dict(self):
-        # 列表展示的简略数据
-        return {
-            'voiceName': self.voice_name,
-            # 'voiceUrl': self.voice_url,
-            'voiceDuration': self.voice_duration,
-            # 'voiceTextUrl': self.voice_text_url,
-            'voiceScore': self.voice_score,
-            'voiceId': self.voice_id
-        }
-
-    def to_dict_detail(self):
-        # 文件详细数据
-        return {
-            'voiceName': self.voice_name,
-            'voiceUrl': self.voice_url,
-            'voiceDuration': self.voice_duration,
-            'voiceTextUrl': self.voice_text_url,
-            'voiceScore': self.voice_score,
-            'voiceId': self.voice_id,
-            'voiceTags': self.voice_tags
-        }
-
-
 @app.route('/upload', methods=['POST'])
 # 上传文件
 def upload():
@@ -139,21 +68,36 @@ def upload():
     # print(f"request.files: {request.values.get('fileName')}")
     code = 200
     msg = ""
+    new_file_id = -1
     try:
         file_byte = request.files.get('voiceFile').read()
         voice_url = upload_file(request.values.get('fileName'), file_byte)
         voice_name = request.values.get('fileName')
         duration = get_voice_time_secs(file_byte, '.\\temporary.mp3')
-        # print(f'时长 {duration}')
+        time_grade = 0
+        if duration <= 30:
+            time_grade = 30 - duration
+        # 以下代码模拟上传文件后转为文字文件，存储到cos
+        change_text = test_voice_change_txt
+        voice_text_url = voice_name.split('.')[0] + '.txt'
+        with open('.\\' + voice_text_url, 'w', encoding='ANSI') as f:
+            f.write(change_text)
+            print(f'上传文件${f}')
+            f.close()
+        with open('.\\' + voice_text_url, 'rb') as f:
+            upload_file_text(voice_text_url, f.read())
+            f.close()
+
         new_file = File(voice_name, voice_url)
+        new_file.voice_text_url = voice_text_url
         new_file.voice_duration = duration
-        # print(new_file)
+        new_file.voice_score = 100 - time_grade
         new_file_id = new_file.add()
     except Exception as e:
         code = 0
         msg = "上传失败"
         print(e)
-        print()
+        print(msg)
     finally:
         return json.dumps({
             'code': code,
@@ -192,19 +136,21 @@ def count_grade():
         file = db.session.query(File).filter(File.voice_id == file_id).first()
 
         # 这里放置测试用的假文本数据地址，实际由机器学习解析语音生成
-        file.voice_text_url = '4161c287b86d0550.txt'
-        tag_list = test_tags.split(',')
-        for item in tag_list:
-            if have_tag(item):
-                illegal_tags += item + ','
-                if grade < 30:
-                    grade += 2
-        file.voice_score = 100 - grade
-        # print(f' illegal_tags {illegal_tags}')
-        file.voice_tags = illegal_tags[:len(illegal_tags) - 1]
+        # file.voice_text_url = '4161c287b86d0550.txt'
+        # tag_list = test_tags.split(',')
+
+        # 进行分词，返回{应该扣除的分数，关键字字符串}
+        res = keys_words_grade(file.voice_text_url)
+        # for item in tag_list:
+        #     if have_tag(item):
+        #         illegal_tags += item + ','
+        #         if grade < 30:
+        #             grade += 2
+        file.voice_score = file.voice_score - res.sub_grade
+        file.voice_tags = res.illegal_tags
         db.session.commit()
     except Exception as e:
-        # print(f'错误 {e}')
+        print(f'错误 {e}')
         code = 0
         msg = '操作失败'
     finally:
@@ -345,56 +291,5 @@ def read_text_file():
         })
 
 
-def upload_folder(url: str):
-    path = url
-    if os.path.exists(path):
-        files = os.listdir(path)
-        for item in files:
-            voice_name = item.split('.')[0]
-            with open(url + '\\' + item, 'rb') as f:
-                voice_url = upload_file(voice_name + '.mp3', f.read())
-                new_file = File(voice_name + '.mp3', voice_url, 0, 0, voice_name + '.txt', '')
-                if db.session.query(File).filter(File.voice_name == voice_name).count() == 0:
-                    new_file.add()
-    else:
-        print('空文件夹')
-
-
-def upload_folder_txt(url: str):
-    path = url
-    if os.path.exists(path):
-        files = os.listdir(path)
-        for item in files:
-            voice_name = item.split('.')[0]
-            with open(url + '\\' + item, 'rb') as f:
-                upload_file_text(voice_name + '.txt', f.read())
-    else:
-        print('空文件夹')
-
-
-def record_duration(url):
-    # 录入已有声音时长
-    path = url
-    if os.path.exists(path):
-        files = os.listdir(path)
-        for i, item in enumerate(files):
-            voice_name = item.split('.')[0]
-            voice_file = eyed3.load(path + '//' + item)
-            secs = int(voice_file.info.time_secs)
-            file = db.session.query(File).filter(File.voice_name == item).first()
-            file.voice_duration = secs
-            db.session.commit()
-            print(f'{i} , {secs}')
-    else:
-        print('空文件夹')
-
-
 if __name__ == '__main__':
     app.run()
-
-    # cache_data()
-
-    # 负责更新cos内文件
-    # upload_folder('D:\毕设语音+文本素材\语音')
-    # upload_folder_txt('D:\毕设语音+文本素材\文本\语音转文本\后五十')
-    # record_duration('D:\毕设语音+文本素材\语音')

@@ -2,8 +2,9 @@ import re
 
 import jieba
 
+from File import File
 from file_operation import client, bucket, text_name
-from main import File
+
 from redis_operation import have_tag
 from tool import db
 
@@ -52,8 +53,8 @@ def keys_words_grade(file_name):
     grade = 0
     for line in response['Body'].get_raw_stream().readlines():
         line = line.strip()
-        print(str(line, 'ANSI'))
-        text += str(line, 'ANSI')
+        print(line.decode('ansi', "ignore"))
+        text += line.decode('ansi', "ignore")
     words_list.extend(participle_words(text))
     print(f'关键字序列res${words_list}')
     for item in words_list:
@@ -79,5 +80,4 @@ def processing_batch(floor_id, ceil_id):
         print(f'文件关键字分数${item.voice_score}')
 
 
-processing_batch(393,393)
-
+# processing_batch(297, 308)

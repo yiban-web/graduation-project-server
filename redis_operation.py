@@ -21,8 +21,6 @@ def test_redis():
     return r.get('foo')
 
 
-
-
 def cache_data():
     # 缓存数据库数据
     # 批量只缓存两百条
@@ -40,19 +38,16 @@ def have_tag(tag_name):
     res = False
     # print(f'redis  {tag_name} {bool(r.get(tag_name))}')
     res = bool(r.get(tag_name))
-    # if bool(r.get(tag_name)):
+
+    # 测试全部从sql中查询
+    # tag = db.session.query(Tag).filter(Tag.tag_name == tag_name)
+    # if tag.count() > 0:
     #     res = True
     # else:
-    #
-    #     tag = db.session.query(Tag).filter(Tag.tag_name == tag_name)
-    #     if tag.count() > 0:
-    #         r.set(tag.first().tag_name, tag.first().tag_type)
-    #         res = True
-    #     else:
-    #         res = False
-    print(f'res {tag_name} {res}')
+    #     res = False
+
     return res
 
 
-cache_data()
-print(f'测试${r.get("微信")}')
+# cache_data()
+# print(f'测试${r.get("微信")}')
