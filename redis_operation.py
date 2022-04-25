@@ -36,7 +36,7 @@ def cache_data():
 def have_tag(tag_name):
     # 返回是否在关键字中存在
     res = False
-    # print(f'redis  {tag_name} {bool(r.get(tag_name))}')
+    print(f'redis  {tag_name} {bool(r.get(tag_name))}')
     res = bool(r.get(tag_name))
 
     # 测试全部从sql中查询

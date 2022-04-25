@@ -53,3 +53,7 @@ class File(db.Model):
             'voiceId': self.voice_id,
             'voiceTags': self.voice_tags
         }
+
+    def stats_count(self, floor_score, ceil_score):
+        number = db.session.query(File).filter(File.voice_score <= ceil_score, File.voice_score > floor_score)
+        return number.count()

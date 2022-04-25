@@ -222,6 +222,29 @@ def selectFiles():
     })
 
 
+@app.route('/statsCount', methods=['GET'])
+# 返回统计数据
+def stats_count():
+    code = 200
+    msg = ""
+    range_list = [[0, 60], [61, 70], [71, 80], [81, 90], [91, 100]]
+    range_data = []
+    con_data = []
+    for item in range_list:
+
+        con = File.stats_count(None,item[0], item[1])
+        range_data.append("至".join(str(i) for i in item) + '分')
+        con_data.append(con)
+    return json.dumps({
+        'code': code,
+        'msg': '',
+        'data': {
+            'x': range_data,
+            'y': con_data
+        }
+    })
+
+
 @app.route('/getFileDetail', methods=['POST'])
 # 根据文件id查找具体内容
 def get_file_detail():
