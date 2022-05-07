@@ -1,3 +1,5 @@
+import base64
+
 import redis
 
 import pymysql
@@ -9,8 +11,17 @@ pymysql.install_as_MySQLdb()
 r = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 
+# 关键字
 class Tag(db.Model):
     __tablename__ = 'tags-list'
+    tag_name = db.Column(db.CHAR(50))
+    tag_id = db.Column(db.INT, primary_key=True, autoincrement=True)
+    tag_type = db.Column(db.CHAR(30))
+
+
+# 盲呼
+class BlindCall(db.Model):
+    __tablename__ = 'blind-call-tags'
     tag_name = db.Column(db.CHAR(50))
     tag_id = db.Column(db.INT, primary_key=True, autoincrement=True)
     tag_type = db.Column(db.CHAR(30))
@@ -29,15 +40,32 @@ def cache_data():
     else:
         tags_list = db.session.query(Tag).all()
     for item in tags_list:
-        r.set(item.tag_name, item.tag_type)
+        r.set('keyWord:' + encode(item.tag_name), item.tag_type)
+    for item in db.session.query(BlindCall).all():
+        r.set('blindCall:' + encode(item.tag_name), item.tag_type)
     # print(bool(r.get('你好')))
 
 
-def have_tag(tag_name):
+def encode(key: str):
+    # 编码
+    b64_b = base64.b64encode(key.encode('utf-8'))
+    return b64_b.decode('utf-8')
+
+
+def decode(key: str):
+    # 解码
+    b64_b = base64.b64decode(key)
+    return b64_b.decode('utf-8')
+
+
+def have_tag(tag_name: str, namespace: str):
     # 返回是否在关键字中存在
+    # namespace: 'keyWord' or 'blindCall'
     res = False
-    print(f'redis  {tag_name} {bool(r.get(tag_name))}')
-    res = bool(r.get(tag_name))
+    # print(f'redis  {namespace+tag_name} '
+    #       f'{bool(r.get(f"{namespace}:{encode(tag_name)}"))} '
+    #       f'{f"{namespace}:{encode(tag_name)}"}')
+    res = bool(r.get(f"{namespace}:{encode(tag_name)}"))
 
     # 测试全部从sql中查询
     # tag = db.session.query(Tag).filter(Tag.tag_name == tag_name)

@@ -1,3 +1,4 @@
+import json
 import re
 
 import jieba
@@ -17,6 +18,8 @@ def participle_words(sentence):
     seg_list = jieba.cut(sentence, cut_all=False)
     res_list = []
     for item in seg_list:
+        # 如果相同的关键字只扣一次分数 if words_test(item) and item not in res_list:
+        # 如果出现就扣分 if words_test(item)
         if words_test(item) and item not in res_list:
             res_list.append(item)
     return res_list
@@ -44,13 +47,16 @@ def keys_words_grade(file_name):
 
     # 返回值类型,{sub_grade:关键字需要减去的分数，illegal_tags:关键字序列}
     class KeyWordsRes:
-        def __init__(self, sub_grade, tags):
+        def __init__(self, sub_grade, tags, is_blind_call):
             self.sub_grade = sub_grade
             self.illegal_tags = tags
+            self.blind_call = is_blind_call
 
     illegal_tags = []
     words_list = []
     grade = 0
+    # 是否盲呼
+    blind_call = 0
     for line in response['Body'].get_raw_stream().readlines():
         line = line.strip()
         print(line.decode('ansi', "ignore"))
@@ -58,11 +64,23 @@ def keys_words_grade(file_name):
     words_list.extend(participle_words(text))
     print(f'关键字序列res${words_list}')
     for item in words_list:
-        if have_tag(item):
-            illegal_tags.append(item)
+        print(item, have_tag(item, 'keyWord'))
+        if have_tag(item, 'keyWord'):
+            print(item)
+            illegal_tags.append({
+                'value': item,
+                'type': 'keyWord'
+            })
             if grade <= 30:
                 grade += 2
-    return KeyWordsRes(grade, ",".join(str(i) for i in illegal_tags))
+        if have_tag(item, 'blindCall'):
+            blind_call = 1
+            illegal_tags.append({
+                'value': item,
+                'type': 'blindCall'
+            })
+    print(f"{grade} {blind_call}")
+    return KeyWordsRes(grade, json.dumps(illegal_tags, ensure_ascii=False), blind_call)
 
 
 def processing_batch(floor_id, ceil_id):
@@ -75,9 +93,11 @@ def processing_batch(floor_id, ceil_id):
         if item.voice_duration <= 30:
             time_grade = 30 - item.voice_duration
         item.voice_score = 100 - keys_grade - time_grade
+        if res.blind_call == 1:
+            item.voice_score -= 40
         item.voice_tags = res.illegal_tags
+        item.blind_call = res.blind_call
         db.session.commit()
         print(f'文件关键字分数${item.voice_score}')
 
-
-# processing_batch(297, 308)
+# processing_batch(482, 482)

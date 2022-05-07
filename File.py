@@ -1,3 +1,5 @@
+import json
+
 from tool import db
 
 
@@ -15,6 +17,8 @@ class File(db.Model):
     voice_url = db.Column(db.VARCHAR(100))
     # 关键字标签
     voice_tags = db.Column(db.TEXT)
+    # 是否盲呼
+    blind_call = db.Column(db.INT)
 
     def __init__(self, name: str, url: str, duration=0, score=0, text_url='', tags=''):
         self.voice_name = name
@@ -51,7 +55,8 @@ class File(db.Model):
             'voiceTextUrl': self.voice_text_url,
             'voiceScore': self.voice_score,
             'voiceId': self.voice_id,
-            'voiceTags': self.voice_tags
+            'voiceTags': json.loads(self.voice_tags),
+            'blind_call': self.blind_call
         }
 
     def stats_count(self, floor_score, ceil_score):

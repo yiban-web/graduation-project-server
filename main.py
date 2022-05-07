@@ -11,7 +11,6 @@ from File import File
 from User import User
 from file_operation import upload_file, delete, download_file, upload_file_text
 from participle_words import keys_words_grade
-from redis_operation import have_tag
 from test_text import test_voice_change_txt
 from tool import app, db
 
@@ -87,7 +86,7 @@ def upload():
         with open('.\\' + voice_text_url, 'rb') as f:
             upload_file_text(voice_text_url, f.read())
             f.close()
-
+        os.remove('.\\' + voice_text_url)
         new_file = File(voice_name, voice_url)
         new_file.voice_text_url = voice_text_url
         new_file.voice_duration = duration
@@ -126,28 +125,20 @@ def count_grade():
     msg = ""
     grade = 0
     data = json.loads(request.data)
-    # file_id = request.args.get('id')
     file_id = data['id']
     # noinspection PyBroadException
     try:
         # 这里设置测试用关键字，每出现一个关键字分数-2，实际关键字由LSTM模型学习生成
-        test_tags = '宗教信仰,避税,反人类,开票,票'
-        illegal_tags = ''
         file = db.session.query(File).filter(File.voice_id == file_id).first()
 
-        # 这里放置测试用的假文本数据地址，实际由机器学习解析语音生成
-        # file.voice_text_url = '4161c287b86d0550.txt'
-        # tag_list = test_tags.split(',')
-
-        # 进行分词，返回{应该扣除的分数，关键字字符串}
+        # 进行分词，返回{应该扣除的分数，关键字字符串,是否盲呼}
         res = keys_words_grade(file.voice_text_url)
-        # for item in tag_list:
-        #     if have_tag(item):
-        #         illegal_tags += item + ','
-        #         if grade < 30:
-        #             grade += 2
+
         file.voice_score = file.voice_score - res.sub_grade
+        if res.blind_call:
+            file.voice_score -= 40
         file.voice_tags = res.illegal_tags
+        file.blind_call = res.blind_call
         db.session.commit()
     except Exception as e:
         print(f'错误 {e}')
@@ -231,8 +222,7 @@ def stats_count():
     range_data = []
     con_data = []
     for item in range_list:
-
-        con = File.stats_count(None,item[0], item[1])
+        con = File.stats_count(None, item[0], item[1])
         range_data.append("至".join(str(i) for i in item) + '分')
         con_data.append(con)
     return json.dumps({
@@ -283,6 +273,29 @@ def delete_file():
     except:
         code = 0
         msg = "删除失败"
+    finally:
+        return json.dumps({
+            'code': code,
+            'msg': msg,
+        })
+
+
+@app.route('/reFileName', methods=['POST'])
+# 修改文件名
+def re_file_name():
+    code = 200
+    msg = ""
+    # noinspection PyBroadException
+    try:
+        file_id = json.loads(request.data)['fileId']
+        file = db.session.query(File).filter(File.voice_id == file_id).first()
+        file.voice_name = json.loads(request.data)['newName']
+        db.session.commit()
+        db.session.close()
+    except Exception as e:
+        print(e)
+        code = 0
+        msg = "修改失败"
     finally:
         return json.dumps({
             'code': code,
