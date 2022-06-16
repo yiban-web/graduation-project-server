@@ -1,4 +1,6 @@
+import calendar
 import os.path
+import time
 
 import eyed3
 import jieba
@@ -9,7 +11,7 @@ from sqlalchemy import func
 
 from File import File
 from User import User
-from file_operation import upload_file, delete, download_file, upload_file_text
+from file_operation import upload_file, delete, download_file, upload_file_text, get_text
 from participle_words import keys_words_grade
 from test_text import test_voice_change_txt
 from tool import app, db
@@ -70,15 +72,17 @@ def upload():
     new_file_id = -1
     try:
         file_byte = request.files.get('voiceFile').read()
-        voice_url = upload_file(request.values.get('fileName'), file_byte)
+        voice_url = upload_file(str(calendar.timegm(time.gmtime())), file_byte)
         voice_name = request.values.get('fileName')
         duration = get_voice_time_secs(file_byte, '.\\temporary.mp3')
         time_grade = 0
         if duration <= 30:
             time_grade = 30 - duration
         # 以下代码模拟上传文件后转为文字文件，存储到cos
-        change_text = test_voice_change_txt
-        voice_text_url = voice_name.split('.')[0] + '.txt'
+        # change_text = test_voice_change_txt
+        # 引入SDK
+        change_text = get_text(voice_url)
+        voice_text_url = str(calendar.timegm(time.gmtime())) + '.txt'
         with open('.\\' + voice_text_url, 'w', encoding='ANSI') as f:
             f.write(change_text)
             print(f'上传文件${f}')
@@ -128,7 +132,7 @@ def count_grade():
     file_id = data['id']
     # noinspection PyBroadException
     try:
-        # 这里设置测试用关键字，每出现一个关键字分数-2，实际关键字由LSTM模型学习生成
+
         file = db.session.query(File).filter(File.voice_id == file_id).first()
 
         # 进行分词，返回{应该扣除的分数，关键字字符串,是否盲呼}
@@ -149,11 +153,6 @@ def count_grade():
             'code': code,
             'msg': msg,
         })
-
-
-def participle_words(sentence):
-    seg_list = jieba.cut("中国上海是一座美丽的国际性大都市", cut_all=False)
-    print("Full Mode: " + "/ ".join(seg_list))
 
 
 @app.route('/haveFilesNum', methods=['GET'])
@@ -188,6 +187,35 @@ def get_files_list():
             'filesList': res
         }
     })
+
+
+@app.route('/reExam', methods=['GET'])
+# 重新质检
+def reExam():
+    file_id = request.args.get('id')
+    code = 200
+    msg = ""
+    total_grade = 100
+    try:
+        file = db.session.query(File).filter(File.voice_id == file_id).first()
+        res = keys_words_grade(file.voice_text_url)
+        if file.voice_duration < 30:
+            total_grade -= 30 - file.voice_duration
+        file.voice_score = total_grade - res.sub_grade
+        if res.blind_call:
+            file.voice_score -= 40
+        file.voice_tags = res.illegal_tags
+        file.blind_call = res.blind_call
+        db.session.commit()
+
+    except Exception as e:
+        code = 0
+        msg = "质检失败"
+    finally:
+        return json.dumps({
+            'code': code,
+            'msg': msg,
+        })
 
 
 @app.route('/selectFiles', methods=['GET'])

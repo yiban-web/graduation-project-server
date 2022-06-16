@@ -59,12 +59,12 @@ def keys_words_grade(file_name):
     blind_call = 0
     for line in response['Body'].get_raw_stream().readlines():
         line = line.strip()
-        print(line.decode('ansi', "ignore"))
+        # print(line.decode('ansi', "ignore"))
         text += line.decode('ansi', "ignore")
     words_list.extend(participle_words(text))
     print(f'关键字序列res${words_list}')
     for item in words_list:
-        print(item, have_tag(item, 'keyWord'))
+        # print(item, have_tag(item, 'keyWord'))
         if have_tag(item, 'keyWord'):
             print(item)
             illegal_tags.append({
@@ -79,7 +79,7 @@ def keys_words_grade(file_name):
                 'value': item,
                 'type': 'blindCall'
             })
-    print(f"{grade} {blind_call}")
+    # print(f"{grade} {blind_call}")
     return KeyWordsRes(grade, json.dumps(illegal_tags, ensure_ascii=False), blind_call)
 
 
@@ -100,4 +100,4 @@ def processing_batch(floor_id, ceil_id):
         db.session.commit()
         print(f'文件关键字分数${item.voice_score}')
 
-# processing_batch(482, 482)
+# processing_batch(316,316)
